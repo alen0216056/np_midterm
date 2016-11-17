@@ -38,7 +38,7 @@ int file_size(char* filename)
 
 void client(int socket_fd)
 {
-	int n, m, size;
+	int n, m, size, i;
 	int max_fd = (fileno(stdin)>socket_fd)? fileno(stdin)+1: socket_fd+1;
 	char send[MAX], receive[MAX], buff[MAX];
 	char* char_ptr, *filename;
@@ -73,12 +73,39 @@ void client(int socket_fd)
 			char_ptr = strtok(buff, " \n");
 			if( strcmp(char_ptr, "GET")==0 )
 			{
+				char_ptr = strtok(NULL, " \n");
+				filename = strtok(NULL, " \n");
+				file_ptr = fopen(filename, "w");
+				if( file_ptr==NULL )
+					sys_error("[ERROR] open file error\n");
 				
+				i = 0;
+				while( read(socket_fd, receive+i, 1) )
+				{
+					if( receive[i]==' ' )
+					{
+						receive[i] = '\0';
+						break;
+					}	
+					i++;
+				}
+				size = atoi(receive);
+				
+				while(size)
+				{
+					n = read(socket_fd, receive, (size<MAX)? size : MAX);
+					if( n<0 )
+						sys_error("[ERROR] read data from server error\n");
+					if( write(fileno(file_ptr), receive, n)<n )
+						sys_error("[ERROR] write data to file error\n");
+					size -= n;
+				}
+				fclose(file_ptr);
+				printf("GET %s %s succeeded\n", char_ptr, filename);
 			}
 			else if( strcmp(char_ptr, "PUT")==0 )
 			{
-				char_ptr = strtok(NULL, " \n");
-				filename = char_ptr;
+				filename = strtok(NULL, " \n");
 				char_ptr = strtok(NULL, " \n");
 				size = file_size(filename);
 				file_ptr = fopen(filename, "r");
@@ -98,7 +125,27 @@ void client(int socket_fd)
 			}
 			else if( strcmp(char_ptr, "LIST")==0 )
 			{
+				i = 0;
+				while( read(socket_fd, receive+i, 1) )
+				{
+					if( receive[i]==' ' )
+					{
+						receive[i] = '\0';
+						break;
+					}	
+					i++;
+				}
+				size = atoi(receive);
 				
+				while(size)
+				{
+					n = read(socket_fd, receive, (size<MAX)? size : MAX);
+					if( n<0 )
+						sys_error("[ERROR] read data from server error\n");
+					if( write(fileno(stdout), receive, n)<n )
+						sys_error("[ERROR] write data to stdout error\n");
+					size -= n;
+				}
 			}
 			else if( strcmp(char_ptr, "EXIT")==0 )
 			{

@@ -37,11 +37,19 @@ int file_size(char* filename)
 	return count;
 }
 
+int filename_length(char files[][MAX], int file_index)
+{
+	int i, count = 0;
+	for(i=0; i<file_index; i++)
+		count += strlen(files[i]) + 1;
+	return count;
+}
+
 void server(int socket_fd)
 {
-	int n, m, size, i;
+	int n, m, size, i, file_index = 0;
 	int connect_fd;
-	char send[MAX], receive[MAX], buff[MAX];
+	char send[MAX], receive[MAX], buff[MAX], files[100][MAX];
 	char *char_ptr, *filename;
 	FILE* file_ptr;
 	
@@ -60,11 +68,27 @@ void server(int socket_fd)
 			}
 			else
 			{
+				receive[n] = '\0';
 				strcpy(buff, receive);
 				char_ptr = strtok(buff, " \n");
 				if( strcmp(char_ptr, "GET")==0 )
 				{
+					filename = strtok(NULL, " \n");
+					char_ptr = strtok(NULL, " \n");
+					size = file_size(filename);
+					file_ptr = fopen(filename, "r");
+					if( file_ptr==NULL )
+						sys_error("[ERROR] open file error\n");
 					
+					snprintf(send, MAX, "%d \0", size);
+					write(connect_fd, send, strlen(send));
+					while( n=read(fileno(file_ptr), send, MAX) )
+					{
+						if( n<0 )
+							sys_error("[ERROR] read error\n");
+						if( write(connect_fd, send, n)<n )
+							sys_error("[ERROR] translate file to client error\n");
+					}
 				}
 				else if( strcmp(char_ptr, "PUT")==0 )
 				{
@@ -88,10 +112,7 @@ void server(int socket_fd)
 					
 					while(size)
 					{
-						if( size>MAX )
-							n = read(connect_fd, receive, MAX);
-						else
-							n = read(connect_fd, receive, size);
+						n = read(connect_fd, receive, (size<MAX)? size : MAX);
 						if( n<0 )
 							sys_error("[ERROR] read data from client error\n");
 						if( write(fileno(file_ptr), receive, n)<n )
@@ -99,13 +120,23 @@ void server(int socket_fd)
 						size -= n;
 					}
 					fclose(file_ptr);
+					strcpy(files[file_index], filename);
+					file_index++;
 				}
 				else if( strcmp(char_ptr, "LIST")==0 )
 				{
-					
+					snprintf(send, MAX, "%d \0", filename_length(files, file_index));
+					write(connect_fd, send, strlen(send));
+					for(i=0; i<file_index; i++)
+					{
+						snprintf(send, MAX, "%s\n\0", files[i]);
+						write(connect_fd, send, strlen(send));
+					}
 				}
 				else if( strcmp(char_ptr, "EXIT")==0 )
 				{
+					printf("client close\n");
+					break;
 				}
 			}
 		}
